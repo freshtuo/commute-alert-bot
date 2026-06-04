@@ -1,0 +1,64 @@
+timezone: America/New_York
+
+commute_windows:
+  weekdays_only: true
+  morning:
+    start: "07:30"
+    end: "09:30"
+  evening:
+    start: "16:30"
+    end: "18:45"
+
+feeds:
+  subway_alerts_url: "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-alerts"
+  lirr_alerts_url: "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/lirr%2Fgtfs-lirr-alerts"
+  timeout_seconds: 20
+  api_key_env: "MTA_API_KEY"
+
+monitoring:
+  subway_routes:
+    - "Q"
+    - "1"
+    - "2"
+    - "3"
+  rail:
+    lirr_enabled: true
+    text_filters:
+      - "lirr"
+      - "great neck"
+      - "penn station"
+      - "grand central"
+      - "port washington"
+  bus:
+    enabled: false
+    routes:
+      - "M96"
+      - "M106"
+
+notifications:
+  sender_email: "your-bot@gmail.com"
+  recipients:
+    - "you@example.com"
+    - "wife@example.com"
+  smtp_host: "smtp.gmail.com"
+  smtp_port: 587
+  gmail_app_password_env: "GMAIL_APP_PASSWORD"
+
+keywords:
+  - "delay"
+  - "delayed"
+  - "cancelled"
+  - "canceled"
+  - "suspended"
+  - "reroute"
+  - "signal problem"
+  - "switch problem"
+  - "service change"
+
+cache:
+  file: "data/alert_cache.json"
+  retention_hours: 168
+
+logging:
+  directory: "logs"
+  file: "commute-alert-bot.log"

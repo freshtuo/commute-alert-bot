@@ -1,2 +1,54 @@
 # commute-alert-bot
-Monitor my regular commute routes during fixed commute windows and notify me and my wife if there are relevant service disruptions
+
+Small Python script that checks official MTA service alerts during weekday commute windows and emails two recipients when there are new relevant disruptions for subway routes `Q`, `1`, `2`, `3` and LIRR.
+
+## Project layout
+
+```text
+commute-alert-bot/
+├── main.py
+├── src/
+├── config/
+├── data/
+├── logs/
+├── notes/
+├── requirements.txt
+└── README.md
+```
+
+## What v1 does
+
+- checks fixed commute windows from `config/config.yaml`
+- fetches MTA GTFS-Realtime service alerts for subway and LIRR
+- filters alerts to the monitored routes and disruption keywords
+- avoids duplicate notifications with `data/alert_cache.json`
+- sends one concise Gmail SMTP email when new alerts are found
+- writes a simple log file under `logs/`
+
+## What v1 does not do
+
+- trip planning
+- alternate-route suggestions
+- maps
+- bus integration
+- exact next-train arrival checks
+
+## Quick start
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python main.py
+```
+
+Set these environment variables before running:
+
+- `GMAIL_APP_PASSWORD`
+  This is the 16-character Google App Password for your dedicated sender Gmail account, not your normal Gmail password.
+- `MTA_API_KEY` if your environment or feed access requires it
+  For v1 subway and LIRR alerts, this is usually optional.
+
+More details are in [notes/manual.md](/d:/Tools/commute-alert-bot/notes/manual.md).
+
+For implementation details, see [notes/developer-guide.md](/d:/Tools/commute-alert-bot/notes/developer-guide.md).
