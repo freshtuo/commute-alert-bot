@@ -6,24 +6,25 @@ Small Python script that checks official MTA service alerts during weekday commu
 
 ```text
 commute-alert-bot/
-├── main.py
-├── src/
-├── config/
-├── data/
-├── logs/
-├── notes/
-├── requirements.txt
-└── README.md
+|-- main.py
+|-- src/
+|-- config/
+|-- data/
+|-- logs/
+|-- notes/
+|-- requirements.txt
+`-- README.md
 ```
 
 ## What v1 does
 
 - checks fixed commute windows from `config/config.yaml`
-- fetches MTA GTFS-Realtime service alerts for subway and LIRR
+- fetches the combined MTA GTFS-Realtime service alerts feed and filters it down to subway and LIRR
 - filters alerts to the monitored routes and disruption keywords
 - avoids duplicate notifications with `data/alert_cache.json`
 - sends one concise Gmail SMTP email when new alerts are found
 - writes a simple log file under `logs/`
+- also prints short status messages to the console for easier local testing
 
 ## What v1 does not do
 
@@ -41,6 +42,9 @@ python -m venv .venv
 pip install -r requirements.txt
 python main.py
 ```
+
+Keep `config/config.yaml` safe for GitHub.
+Put real personal values such as sender/recipient email addresses in `config/config.local.yaml`, which is gitignored and merged automatically at runtime.
 
 Set these environment variables before running:
 

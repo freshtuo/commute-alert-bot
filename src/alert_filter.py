@@ -12,11 +12,16 @@ def filter_relevant_alerts(
     """Keep only current alerts that match the monitored routes and keywords."""
     monitoring = config.get("monitoring", {})
     keywords = [keyword.lower() for keyword in config.get("keywords", [])]
-    subway_routes = set(monitoring.get("subway_routes", []))
-    rail_filters = [
-        value.lower() for value in monitoring.get("rail", {}).get("text_filters", [])
-    ]
-    lirr_enabled = monitoring.get("rail", {}).get("lirr_enabled", True)
+    subway_config = monitoring.get("subway", {})
+    subway_enabled = subway_config.get("enabled", True)
+    subway_routes = set(subway_config.get("routes", []))
+    rail_config = monitoring.get("rail", {})
+    rail_filters = [value.lower() for value in rail_config.get("text_filters", [])]
+    rail_route_ids = set(rail_config.get("route_ids", []))
+    rail_stop_ids = set(rail_config.get("stop_ids", []))
+    rail_route_names = [value.lower() for value in rail_config.get("route_names", [])]
+    rail_station_names = [value.lower() for value in rail_config.get("station_names", [])]
+    lirr_enabled = rail_config.get("lirr_enabled", True)
 
     relevant_alerts: list[dict[str, Any]] = []
     for alert in alerts:
@@ -26,14 +31,28 @@ def filter_relevant_alerts(
         if not alert_matches_keywords(alert, keywords):
             continue
 
-        if alert["source"] == "subway" and subway_routes.intersection(alert.get("routes", [])):
+        if subway_enabled and alert_matches_subway_scope(alert, subway_routes):
             relevant_alerts.append(alert)
             continue
 
-        if alert["source"] == "lirr" and lirr_enabled and alert_matches_lirr_scope(alert, rail_filters):
+        if lirr_enabled and alert_matches_lirr_scope(
+            alert=alert,
+            route_ids=rail_route_ids,
+            stop_ids=rail_stop_ids,
+            route_names=rail_route_names,
+            station_names=rail_station_names,
+            text_filters=rail_filters,
+        ):
             relevant_alerts.append(alert)
 
     return relevant_alerts
+
+
+def alert_matches_subway_scope(alert: dict[str, Any], subway_routes: set[str]) -> bool:
+    """Return True when the alert targets the monitored subway routes."""
+    agencies = set(alert.get("agencies", []))
+    routes = set(alert.get("routes", []))
+    return bool({"MTASBWY", "MTA NYCT"} & agencies and subway_routes & routes)
 
 
 def alert_is_active_now(alert: dict[str, Any], current_time: datetime) -> bool:
@@ -63,6 +82,7 @@ def alert_matches_keywords(alert: dict[str, Any], keywords: list[str]) -> bool:
         [
             alert.get("header", ""),
             alert.get("description", ""),
+            " ".join(alert.get("agencies", [])),
             " ".join(alert.get("routes", [])),
             " ".join(alert.get("stops", [])),
         ]
@@ -71,21 +91,42 @@ def alert_matches_keywords(alert: dict[str, Any], keywords: list[str]) -> bool:
     return any(keyword in haystack for keyword in keywords)
 
 
-def alert_matches_lirr_scope(alert: dict[str, Any], text_filters: list[str]) -> bool:
-    """Keep LIRR alerts broad by default, but allow config text filters to narrow them."""
-    if not text_filters:
+def alert_matches_lirr_scope(
+    *,
+    alert: dict[str, Any],
+    route_ids: set[str],
+    stop_ids: set[str],
+    route_names: list[str],
+    station_names: list[str],
+    text_filters: list[str],
+) -> bool:
+    """Match LIRR alerts using route IDs, stop IDs, and route/station text hints."""
+    agencies = set(alert.get("agencies", []))
+    if "LI" not in agencies:
+        return False
+
+    routes = set(alert.get("routes", []))
+    stops = set(alert.get("stops", []))
+    if route_ids and route_ids.intersection(routes):
+        return True
+    if stop_ids and stop_ids.intersection(stops):
         return True
 
     haystack = " ".join(
         [
             alert.get("header", ""),
             alert.get("description", ""),
+            " ".join(alert.get("agencies", [])),
             " ".join(alert.get("routes", [])),
             " ".join(alert.get("stops", [])),
         ]
     ).lower()
 
-    return any(text_filter in haystack for text_filter in text_filters)
+    combined_filters = route_names + station_names + text_filters
+    if not combined_filters and not route_ids and not stop_ids:
+        return True
+
+    return any(text_filter in haystack for text_filter in combined_filters)
 
 
 def build_email_lines(
@@ -104,6 +145,9 @@ def build_email_lines(
     for alert in alerts:
         summary = build_alert_summary(alert)
         lines.append(f"- {summary}")
+        link = get_human_alert_link(alert)
+        if link:
+            lines.append(f"  More info: {link}")
 
     lines.extend(
         [
@@ -116,13 +160,14 @@ def build_email_lines(
 
 def build_alert_summary(alert: dict[str, Any]) -> str:
     """Render one alert as a compact single-line summary."""
+    prefix = "[ONGOING] " if alert.get("send_reason") == "reminder" else ""
     route_text = ", ".join(alert.get("routes", [])) or alert.get("source", "").upper()
     header = (alert.get("header") or "Service alert").strip()
     description = clean_text(alert.get("description", ""))
 
     if description:
-        return f"[{route_text}] {header}: {description}"
-    return f"[{route_text}] {header}"
+        return f"{prefix}[{route_text}] {header}: {description}"
+    return f"{prefix}[{route_text}] {header}"
 
 
 def clean_text(text: str, limit: int = 280) -> str:
@@ -131,3 +176,17 @@ def clean_text(text: str, limit: int = 280) -> str:
     if len(normalized) <= limit:
         return normalized
     return normalized[: limit - 3].rstrip() + "..."
+
+
+def get_human_alert_link(alert: dict[str, Any]) -> str:
+    """Return the best human-readable link for an alert."""
+    detail_url = (alert.get("detail_url") or "").strip()
+    if detail_url:
+        return detail_url
+
+    agencies = set(alert.get("agencies", []))
+    if "LI" in agencies:
+        return "https://www.mta.info/agency/long-island-rail-road"
+    if agencies.intersection({"MTASBWY", "MTA NYCT", "MTABC"}):
+        return "https://www.mta.info/alerts"
+    return "https://www.mta.info/"

@@ -56,8 +56,12 @@ commute-alert-bot/
 
 - `config/config.yaml`
   Main config file for commute windows, monitored routes, feed URLs, notification settings, and keyword matching.
+- `config/config.local.yaml`
+  Optional gitignored local override file for personal addresses and other machine-specific settings.
 - `data/alert_cache.json`
-  Stores fingerprints of alerts already sent, so the bot does not send the same alert repeatedly.
+  Stores fingerprints of alerts already sent, along with send timestamps and small metadata used for de-duplication and reminder sends.
+- `data/snapshots/`
+  Stores a small rolling set of JSON snapshots showing what the bot fetched, matched, and decided to email.
 
 ### Support folders
 
@@ -83,30 +87,31 @@ Each execution of `python main.py` follows this sequence:
 
 1. Root `main.py` imports and calls `src.app.main()`
 2. `src/app.py` loads `config/config.yaml`
-3. Logging is initialized
-4. Current time is checked against the configured commute windows
-5. If the current time is outside the allowed window, the script logs that and exits
-6. If inside the window, the script fetches subway and LIRR alert feeds
-7. The protobuf alert data is normalized into simple dictionaries
-8. The alert list is filtered for:
+3. If present, `src/app.py` merges `config/config.local.yaml` on top of the shared config
+4. Logging is initialized
+5. Current time is checked against the configured commute windows
+6. If the current time is outside the allowed window, the script logs that and exits
+7. If inside the window, the script fetches the combined MTA service alerts feed
+8. The protobuf alert data is normalized into simple dictionaries
+9. The alert list is filtered for:
    - monitored subway routes
    - LIRR text relevance
    - disruption keywords
    - alerts active right now
-9. The bot loads `data/alert_cache.json`
-10. Alerts already seen before are removed
-11. If any new relevant alerts remain, one email is sent
-12. New alert fingerprints are written to the cache
-13. The script logs the result and exits
+10. The bot loads `data/alert_cache.json`
+11. Alerts already seen before are suppressed unless they have reached the reminder interval
+12. If any new or reminder-eligible relevant alerts remain, one email is sent
+13. A JSON snapshot is written for debugging
+14. Alert fingerprints and send metadata are written to the cache
+15. The script logs the result and exits
 
 ## How Real-Time Info Is Fetched
 
 The bot uses official MTA GTFS-Realtime service alert feeds.
 
-The feed URLs are defined in `config/config.yaml`:
+The feed URL is defined in `config/config.yaml`:
 
-- `feeds.subway_alerts_url`
-- `feeds.lirr_alerts_url`
+- `feeds.service_alerts_url`
 
 ### Implementation details
 
@@ -114,16 +119,20 @@ The feed URLs are defined in `config/config.yaml`:
 - the response body is parsed using `gtfs-realtime-bindings`
 - only entities with an `alert` field are processed
 - each alert is normalized into a standard Python dictionary
+- the app then filters those alerts locally for the monitored subway routes and LIRR scope
 
 The normalized structure includes:
 
 - `id`
 - `source`
+- `agencies`
 - `routes`
 - `stops`
 - `header`
 - `description`
 - `active_periods`
+- `active_period_signature`
+- `detail_url`
 - `fingerprint`
 
 This normalization step makes the rest of the app independent from raw protobuf objects.
@@ -190,6 +199,12 @@ Notification is handled by `src/email_sender.py`.
 6. Log in with the sender Gmail account and app password
 7. Send the message
 
+When possible, the email also includes a human-readable link:
+
+- first choice: the alert's own GTFS `url` field, if present
+- fallback for subway/bus: `https://www.mta.info/alerts`
+- fallback for LIRR: `https://www.mta.info/agency/long-island-rail-road`
+
 ### What the Gmail App Password is
 
 The Gmail App Password is a 16-character code generated in the Google Account security settings for the dedicated sender account.
@@ -220,17 +235,25 @@ MTA alerts often remain active for a while. Since cron may run every 10 minutes,
 ### How it works
 
 1. Every normalized alert gets a `fingerprint`
-2. The fingerprint is built in `src/mta_client.py` by hashing stable alert fields
+2. The fingerprint is built in `src/mta_client.py` from stable incident fields such as the MTA alert ID, agencies, routes, stops, active period signature, header, and description
 3. Before sending email, `src/app.py` loads the existing cache
-4. Any alert whose fingerprint is already in the cache is skipped
-5. After a successful email send, the new fingerprints are stored with a timestamp
+4. If a fingerprint is new, the bot sends it immediately
+5. If a fingerprint is already known but the alert is still active and the reminder interval has passed, the bot can send one controlled reminder
+6. After a successful email send, the cache stores the send time plus a small amount of human-readable alert metadata
 
 Example cache shape:
 
 ```json
 {
   "alerts": {
-    "some_fingerprint_hash": "2026-06-03T08:40:12-04:00"
+    "some_fingerprint_hash": {
+      "sent_at": "2026-06-05T08:40:12-04:00",
+      "first_sent_at": "2026-06-04T17:09:46-04:00",
+      "header": "Delays on the [Q] train",
+      "routes": "Q",
+      "alert_id": "lmm:alert:104907",
+      "active_period_signature": "2026-06-05T12:00:00+00:00>2026-06-05T15:00:00+00:00"
+    }
   }
 }
 ```
@@ -238,6 +261,29 @@ Example cache shape:
 ### Cache cleanup
 
 `prune_cache(...)` removes old entries based on `cache.retention_hours` from config so the file stays small.
+`should_send_alert(...)` allows a still-active alert to send again after `cache.reminder_after_minutes`.
+
+## Debug Snapshots
+
+The bot now writes a small rolling set of JSON snapshots to `data/snapshots/`.
+
+These snapshots are for debugging questions like:
+
+- what did the MTA feed contain at that moment?
+- which alerts matched the commute rules?
+- what exactly was emailed?
+- why did a run send nothing?
+
+Snapshot files are written for:
+
+- successful email sends
+- no-send runs
+- fetch failures
+- email failures
+
+If `snapshots.raw_on_error` is enabled, fetch failures can also save a `.bin` file containing the raw feed response body, capped by `snapshots.raw_max_bytes`.
+
+This is especially useful because MTA alerts can change or disappear later.
 
 ## Main Functions and Their Roles
 
@@ -257,8 +303,20 @@ Example cache shape:
   Reads previously-sent alert fingerprints.
 - `save_cache(cache_path, fingerprints)`
   Writes the updated cache back to disk.
+- `save_snapshot(config, project_root, current_time, snapshot_name, payload)`
+  Writes one JSON debugging snapshot and prunes older snapshot files.
+- `save_raw_error_snapshot(config, project_root, current_time, snapshot_name, response_bytes)`
+  Optionally writes the raw feed response body for fetch-error debugging.
+- `prune_snapshot_files(snapshot_dir, keep_last)`
+  Keeps only the newest configured snapshot files.
 - `prune_cache(fingerprints, current_time, retention_hours)`
   Removes stale cache entries.
+- `should_send_alert(alert, sent_cache, current_time, reminder_after_minutes)`
+  Decides whether an alert is new, reminder-eligible, or still suppressed.
+- `build_cache_record(alert, current_time)`
+  Builds the cache entry written after a successful send.
+- `build_subject(config, new_count, reminder_count)`
+  Creates a more noticeable email subject line.
 - `main()`
   Coordinates the entire run.
 
@@ -270,12 +328,14 @@ Example cache shape:
   Downloads and parses one GTFS-Realtime feed.
 - `normalize_alert(entity, source)`
   Converts protobuf alert data into the internal dictionary format.
+- `build_active_period_signature(active_periods)`
+  Collapses active periods into a stable string used for fingerprinting.
 - `get_translated_text(translated_string)`
   Extracts text from GTFS translated string fields.
 - `unix_to_iso(timestamp)`
   Converts Unix timestamps to ISO strings.
 - `build_fingerprint(alert)`
-  Creates a stable de-duplication key.
+  Creates a stable incident-aware de-duplication key.
 
 ### `src/alert_filter.py`
 
@@ -308,12 +368,40 @@ Example cache shape:
 - subway and LIRR feed URLs
 - request timeout
 - monitored subway routes
-- LIRR text filters
+- subway enabled flag
+- LIRR route IDs, stop IDs, route names, station names, and text filters
 - optional future bus config
 - notification sender and recipients
+- email subject prefix
 - keyword list
-- cache file and retention period
+- cache file, retention period, and reminder interval
+- snapshot directory and how many snapshots to keep
+- whether raw fetch-error bodies should be saved, and how many bytes to keep
 - log folder and file name
+
+## GTFS Bindings vs MTA `updated_at`
+
+The project currently uses `gtfs-realtime-bindings`, which is the standard Python package for reading ordinary GTFS-Realtime protobuf messages such as:
+
+- feed header
+- alert entities
+- informed entities
+- active periods
+- header text
+- description text
+
+MTA also publishes Mercury-specific extensions in its alerts feed documentation, including fields such as:
+
+- `created_at`
+- `updated_at`
+- `alert_type`
+- `display_before_active`
+
+Those extension fields are not part of the standard GTFS-Realtime Python bindings by default.
+
+That is why the current code can read standard GTFS-Realtime alert fields but does not yet read MTA Mercury `updated_at`.
+
+To use `updated_at` directly, we would need to add support for MTA's Mercury protobuf extensions or generated classes for that schema.
 
 ## How To Test the Tool
 
@@ -322,7 +410,7 @@ Example cache shape:
 1. Install dependencies
 2. Set `GMAIL_APP_PASSWORD`
 3. Optionally set `MTA_API_KEY`
-4. Temporarily widen the commute window in config
+4. Temporarily widen the commute window in `config/config.local.yaml`
 5. Run `python main.py`
 6. Check:
    - email inbox
@@ -359,3 +447,11 @@ on a repeating schedule such as every 10 minutes during weekdays.
 - no external database or service dependencies beyond MTA feeds and Gmail SMTP
 - small number of files with focused responsibilities
 - easy to test manually on Windows before moving to Linux
+
+## Future Follow-Ups
+
+- `monitoring.rail.route_ids` and `monitoring.rail.stop_ids` are intentionally present but currently empty.
+- They are placeholders for exact GTFS IDs that should be added later once we load trustworthy static LIRR reference data.
+- Current LIRR matching still relies mainly on `route_names`, `station_names`, and `text_filters`.
+- Bus config exists but bus alert handling is still disabled in v1 and should be revisited in v2.
+- The app does not yet parse MTA Mercury extension fields such as `updated_at`; adding that would improve update detection.

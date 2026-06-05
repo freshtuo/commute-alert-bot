@@ -10,19 +10,28 @@ commute_windows:
     end: "18:45"
 
 feeds:
-  subway_alerts_url: "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-alerts"
-  lirr_alerts_url: "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/lirr%2Fgtfs-lirr-alerts"
+  service_alerts_url: "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fall-alerts"
   timeout_seconds: 20
   api_key_env: "MTA_API_KEY"
 
 monitoring:
-  subway_routes:
-    - "Q"
-    - "1"
-    - "2"
-    - "3"
+  subway:
+    enabled: true
+    routes:
+      - "Q"
+      - "1"
+      - "2"
+      - "3"
   rail:
     lirr_enabled: true
+    route_ids: []
+    stop_ids: []
+    route_names:
+      - "port washington"
+    station_names:
+      - "great neck"
+      - "penn station"
+      - "grand central"
     text_filters:
       - "lirr"
       - "great neck"
@@ -34,6 +43,9 @@ monitoring:
     routes:
       - "M96"
       - "M106"
+    route_ids:
+      - "M96"
+      - "M106"
 
 notifications:
   sender_email: "your-bot@gmail.com"
@@ -43,6 +55,7 @@ notifications:
   smtp_host: "smtp.gmail.com"
   smtp_port: 587
   gmail_app_password_env: "GMAIL_APP_PASSWORD"
+  subject_prefix: "[ALERT] Commute Alert"
 
 keywords:
   - "delay"
@@ -57,8 +70,17 @@ keywords:
 
 cache:
   file: "data/alert_cache.json"
-  retention_hours: 168
+  retention_hours: 48
+  reminder_after_minutes: 60
 
 logging:
   directory: "logs"
   file: "commute-alert-bot.log"
+  console_enabled: true
+
+snapshots:
+  enabled: true
+  directory: "data/snapshots"
+  keep_last: 10
+  raw_on_error: true
+  raw_max_bytes: 250000

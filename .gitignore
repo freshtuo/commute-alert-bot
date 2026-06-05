@@ -1,2 +1,6 @@
 __pycache__/
 logs/
+.venv/
+config/config.local.yaml
+data/alert_cache.json
+data/snapshots/
