@@ -184,9 +184,5 @@ def get_human_alert_link(alert: dict[str, Any]) -> str:
     if detail_url:
         return detail_url
 
-    agencies = set(alert.get("agencies", []))
-    if "LI" in agencies:
-        return "https://www.mta.info/agency/long-island-rail-road"
-    if agencies.intersection({"MTASBWY", "MTA NYCT", "MTABC"}):
-        return "https://www.mta.info/alerts"
+    # MTA's homepage Service Status area is the best general real-time fallback.
     return "https://www.mta.info/"

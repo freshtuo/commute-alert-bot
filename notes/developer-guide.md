@@ -202,8 +202,8 @@ Notification is handled by `src/email_sender.py`.
 When possible, the email also includes a human-readable link:
 
 - first choice: the alert's own GTFS `url` field, if present
-- fallback for subway/bus: `https://www.mta.info/alerts`
-- fallback for LIRR: `https://www.mta.info/agency/long-island-rail-road`
+- fallback for all modes: `https://www.mta.info/`
+  This uses the MTA homepage, where the Service Status area is the better real-time fallback than the broader planned-service alerts page.
 
 ### What the Gmail App Password is
 
