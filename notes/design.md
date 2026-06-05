@@ -65,3 +65,28 @@ To keep v1 flexible:
 - Decide whether to add exact GTFS IDs for bus routes/stops when bus monitoring is added in v2.
 - Add direct support for MTA Mercury extension fields such as `updated_at` if we want more precise alert-update detection.
 - Revisit whether raw snapshots should also be saved for successful runs, or only for fetch failures.
+
+## Future Enhancements
+
+### Personalized Notifications
+
+Possible future version:
+
+- define separate monitored routes for you and your wife
+- keep support for shared routes that should notify both people
+- optionally send:
+  - one combined email to both recipients
+  - separate emails per person
+  - or both combined and per-person notifications
+
+Why this is useful:
+
+- your subway and bus needs are not identical
+- some alerts matter to only one of you
+- targeted alerts would reduce noise while keeping the current shared-alert option available
+
+Why this is not needed yet:
+
+- the current monitored scope is still fairly small
+- there is useful overlap in the commute
+- either person can still manually notify the other when needed

@@ -458,3 +458,20 @@ on a repeating schedule such as every 10 minutes during weekdays.
 - Current LIRR matching still relies mainly on `route_names`, `station_names`, and `text_filters`.
 - Bus service alert handling is supported, but exact bus arrival/location features are still out of scope.
 - The app does not yet parse MTA Mercury extension fields such as `updated_at`; adding that would improve update detection.
+
+### Personalized Notification Profiles
+
+A good future enhancement would be to add profile-aware routing, for example:
+
+- `profiles.you`
+- `profiles.wife`
+- `profiles.shared`
+
+Each profile could define:
+
+- subway routes
+- bus routes
+- rail scope
+- recipient email addresses
+
+That would allow the bot to keep the current shared-notification behavior while optionally sending more targeted alerts when only one person's commute is affected.
