@@ -24,6 +24,7 @@ Edit the config and set:
 - commute windows
 - sender Gmail address
 - recipient email addresses
+- bus enable/disable and route IDs if you want to change bus coverage
 - any LIRR text filters you want
 
 ## 3. Set environment variables

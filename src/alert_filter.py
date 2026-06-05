@@ -22,6 +22,10 @@ def filter_relevant_alerts(
     rail_route_names = [value.lower() for value in rail_config.get("route_names", [])]
     rail_station_names = [value.lower() for value in rail_config.get("station_names", [])]
     lirr_enabled = rail_config.get("lirr_enabled", True)
+    bus_config = monitoring.get("bus", {})
+    bus_enabled = bus_config.get("enabled", False)
+    bus_route_ids = set(bus_config.get("route_ids", []))
+    bus_route_names = [value.lower() for value in bus_config.get("routes", [])]
 
     relevant_alerts: list[dict[str, Any]] = []
     for alert in alerts:
@@ -32,6 +36,10 @@ def filter_relevant_alerts(
             continue
 
         if subway_enabled and alert_matches_subway_scope(alert, subway_routes):
+            relevant_alerts.append(alert)
+            continue
+
+        if bus_enabled and alert_matches_bus_scope(alert, bus_route_ids, bus_route_names):
             relevant_alerts.append(alert)
             continue
 
@@ -53,6 +61,29 @@ def alert_matches_subway_scope(alert: dict[str, Any], subway_routes: set[str]) -
     agencies = set(alert.get("agencies", []))
     routes = set(alert.get("routes", []))
     return bool({"MTASBWY", "MTA NYCT"} & agencies and subway_routes & routes)
+
+
+def alert_matches_bus_scope(
+    alert: dict[str, Any], bus_route_ids: set[str], bus_route_names: list[str]
+) -> bool:
+    """Return True when the alert targets the monitored bus routes."""
+    agencies = set(alert.get("agencies", []))
+    if not agencies.intersection({"MTA NYCT", "MTABC"}):
+        return False
+
+    routes = set(alert.get("routes", []))
+    if bus_route_ids and bus_route_ids.intersection(routes):
+        return True
+
+    haystack = " ".join(
+        [
+            alert.get("header", ""),
+            alert.get("description", ""),
+            " ".join(alert.get("routes", [])),
+            " ".join(alert.get("stops", [])),
+        ]
+    ).lower()
+    return any(route_name in haystack for route_name in bus_route_names)
 
 
 def alert_is_active_now(alert: dict[str, Any], current_time: datetime) -> bool:

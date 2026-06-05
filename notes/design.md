@@ -5,6 +5,7 @@
 Version 1 is a small cron-run Python script that watches official MTA service alerts for:
 
 - Subway routes `Q`, `1`, `2`, `3`
+- Bus routes `M96`, `M106`
 - LIRR alerts relevant to the Great Neck / Penn Station / Grand Central commute
 
 It sends one email to two recipients when new relevant alerts appear during weekday commute windows.
@@ -15,7 +16,7 @@ It sends one email to two recipients when new relevant alerts appear during week
 - No alternate-route suggestions
 - No maps
 - No arrivals prediction
-- No bus implementation in v1
+- No exact bus arrival or vehicle tracking in v1
 - No database
 - No web app
 
@@ -27,6 +28,7 @@ It sends one email to two recipients when new relevant alerts appear during week
 4. Normalize the protobuf alerts into plain Python dictionaries
 5. Filter alerts by:
    - monitored subway routes
+   - monitored bus routes
    - LIRR scope text filters
    - disruption keywords
 6. Compare alert fingerprints against `data/alert_cache.json`
@@ -44,6 +46,7 @@ It sends one email to two recipients when new relevant alerts appear during week
 - Cron is used instead of a long-running worker
 - Plain-text email is easier to debug than HTML email
 - Bus is represented in config now so it can be added later without restructuring the project
+- Bus service alerts are supported, but Bus Time arrival/location APIs are still intentionally out of scope
 
 ## Notes on MTA feed access
 

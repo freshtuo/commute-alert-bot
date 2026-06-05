@@ -39,7 +39,7 @@ monitoring:
       - "grand central"
       - "port washington"
   bus:
-    enabled: false
+    enabled: true
     routes:
       - "M96"
       - "M106"

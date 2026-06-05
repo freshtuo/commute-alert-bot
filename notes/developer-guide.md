@@ -95,6 +95,7 @@ Each execution of `python main.py` follows this sequence:
 8. The protobuf alert data is normalized into simple dictionaries
 9. The alert list is filtered for:
    - monitored subway routes
+   - monitored bus routes
    - LIRR text relevance
    - disruption keywords
    - alerts active right now
@@ -119,7 +120,7 @@ The feed URL is defined in `config/config.yaml`:
 - the response body is parsed using `gtfs-realtime-bindings`
 - only entities with an `alert` field are processed
 - each alert is normalized into a standard Python dictionary
-- the app then filters those alerts locally for the monitored subway routes and LIRR scope
+- the app then filters those alerts locally for the monitored subway routes, monitored bus routes, and LIRR scope
 
 The normalized structure includes:
 
@@ -177,6 +178,7 @@ These keywords come from `config/config.yaml`.
 `filter_relevant_alerts(...)` then applies commute-specific scope:
 
 - subway alerts must match one of the monitored routes: `Q`, `1`, `2`, `3`
+- bus alerts can match monitored routes such as `M96` and `M106`
 - LIRR alerts must pass the configured text filters such as:
   - `great neck`
   - `penn station`
@@ -369,8 +371,9 @@ This is especially useful because MTA alerts can change or disappear later.
 - request timeout
 - monitored subway routes
 - subway enabled flag
+- monitored bus routes and bus enabled flag
 - LIRR route IDs, stop IDs, route names, station names, and text filters
-- optional future bus config
+- optional future bus arrivals/vehicle tracking work
 - notification sender and recipients
 - email subject prefix
 - keyword list
@@ -453,5 +456,5 @@ on a repeating schedule such as every 10 minutes during weekdays.
 - `monitoring.rail.route_ids` and `monitoring.rail.stop_ids` are intentionally present but currently empty.
 - They are placeholders for exact GTFS IDs that should be added later once we load trustworthy static LIRR reference data.
 - Current LIRR matching still relies mainly on `route_names`, `station_names`, and `text_filters`.
-- Bus config exists but bus alert handling is still disabled in v1 and should be revisited in v2.
+- Bus service alert handling is supported, but exact bus arrival/location features are still out of scope.
 - The app does not yet parse MTA Mercury extension fields such as `updated_at`; adding that would improve update detection.

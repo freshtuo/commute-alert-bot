@@ -1,6 +1,6 @@
 # commute-alert-bot
 
-Small Python script that checks official MTA service alerts during weekday commute windows and emails two recipients when there are new relevant disruptions for subway routes `Q`, `1`, `2`, `3` and LIRR.
+Small Python script that checks official MTA service alerts during weekday commute windows and emails two recipients when there are new relevant disruptions for subway routes `Q`, `1`, `2`, `3`, bus routes `M96`, `M106`, and LIRR.
 
 ## Project layout
 
@@ -19,7 +19,7 @@ commute-alert-bot/
 ## What v1 does
 
 - checks fixed commute windows from `config/config.yaml`
-- fetches the combined MTA GTFS-Realtime service alerts feed and filters it down to subway and LIRR
+- fetches the combined MTA GTFS-Realtime service alerts feed and filters it down to subway, bus, and LIRR
 - filters alerts to the monitored routes and disruption keywords
 - avoids duplicate notifications with `data/alert_cache.json`
 - sends one concise Gmail SMTP email when new alerts are found
@@ -31,7 +31,7 @@ commute-alert-bot/
 - trip planning
 - alternate-route suggestions
 - maps
-- bus integration
+- exact bus arrival / location tracking
 - exact next-train arrival checks
 
 ## Quick start
