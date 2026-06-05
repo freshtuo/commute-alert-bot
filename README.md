@@ -56,3 +56,5 @@ Set these environment variables before running:
 More details are in [notes/manual.md](/d:/Tools/commute-alert-bot/notes/manual.md).
 
 For implementation details, see [notes/developer-guide.md](/d:/Tools/commute-alert-bot/notes/developer-guide.md).
+
+For Linux server and cron setup, see [notes/server-deploy.md](/d:/Tools/commute-alert-bot/notes/server-deploy.md).
