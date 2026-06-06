@@ -4,3 +4,4 @@ logs/
 config/config.local.yaml
 data/alert_cache.json
 data/snapshots/
+run.sh
