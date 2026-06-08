@@ -150,8 +150,40 @@ def get_translated_text(translated_string: Any) -> str:
 
 
 def unix_to_iso(timestamp: int) -> str:
-    """Convert a protobuf Unix timestamp into an ISO 8601 string."""
-    return datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()
+    """Convert a protobuf Unix timestamp into an ISO 8601 string.
+
+    Some feeds occasionally contain timestamps in milliseconds or other oversized
+    units. This helper normalizes them down to plausible Unix-second values and
+    returns an empty string only when the value is still unusable.
+    """
+    normalized = normalize_unix_timestamp(timestamp)
+    if normalized is None:
+        return ""
+    return datetime.fromtimestamp(normalized, tz=timezone.utc).isoformat()
+
+
+def normalize_unix_timestamp(timestamp: int) -> int | None:
+    """Normalize an incoming timestamp to plausible Unix seconds.
+
+    GTFS-Realtime should use Unix seconds, but in practice we defensively handle
+    unexpectedly large values by scaling milliseconds/microseconds/nanoseconds
+    down until they fall into a plausible range.
+    """
+    if timestamp <= 0:
+        return None
+
+    normalized = int(timestamp)
+    max_reasonable_seconds = 32503680000  # 3000-01-01T00:00:00Z
+
+    while normalized > max_reasonable_seconds:
+        normalized //= 1000
+
+    try:
+        datetime.fromtimestamp(normalized, tz=timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+    return normalized
 
 
 def build_fingerprint(alert: dict[str, Any]) -> str:
