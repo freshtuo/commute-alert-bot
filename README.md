@@ -53,6 +53,16 @@ Set these environment variables before running:
 - `MTA_API_KEY` if your environment or feed access requires it
   For v1 subway and LIRR alerts, this is usually optional.
 
+By default, Gmail SMTP uses SSL on port `465`. If your environment allows
+STARTTLS on port `587` instead, set `notifications.smtp_port: 587` and
+`notifications.smtp_tls_mode: "starttls"` in `config/config.local.yaml`.
+
+Set `notifications.enabled: false` to keep fetching and matching alerts without
+attempting to send email.
+
+Recent manual-check summaries are written newest-first to `data/latest_alerts.txt`.
+Old entries are pruned using `manual_report.retention_days`.
+
 More details are in [notes/manual.md](/d:/Tools/commute-alert-bot/notes/manual.md).
 
 For implementation details, see [notes/developer-guide.md](/d:/Tools/commute-alert-bot/notes/developer-guide.md).

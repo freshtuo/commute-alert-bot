@@ -24,6 +24,10 @@ Edit the config and set:
 - commute windows
 - sender Gmail address
 - recipient email addresses
+- Gmail SMTP settings. The default is SSL on port `465`; if your machine uses
+  STARTTLS on port `587`, set `notifications.smtp_tls_mode: "starttls"` too.
+- set `notifications.enabled: false` to test or run cron without connecting to
+  Gmail
 - bus enable/disable and route IDs if you want to change bus coverage
 - any LIRR text filters you want
 
@@ -42,6 +46,8 @@ $env:MTA_API_KEY = "optional-if-needed"
 Notes:
 
 - `GMAIL_APP_PASSWORD` is required for Gmail SMTP email sending
+- if Gmail returns `WebLoginRequired`, sign in to the sender account in a
+  browser and create/rotate the App Password for that same account
 - `MTA_API_KEY` is optional for v1 subway and LIRR alert checks
 - for cron or a server environment, set these in the scheduler or shell profile instead of hard-coding them
 
@@ -76,6 +82,8 @@ The script also checks the configured time windows itself, so an extra off-windo
 ## 6. Files to watch
 
 - `logs/commute-alert-bot.log`: execution log
+- `data/latest_alerts.txt`: newest-first manual summary of recent runs and any
+  alerts that would have triggered an email
 - `data/alert_cache.json`: sent-alert history used for de-duplication and controlled reminder sends
 - `data/snapshots/`: per-run JSON snapshots of fetched alerts, matched alerts, and email decisions for debugging
   If `snapshots.raw_on_error` is enabled, fetch failures can also save a raw response `.bin` file for deeper debugging.

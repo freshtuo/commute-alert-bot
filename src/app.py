@@ -139,6 +139,112 @@ def save_cache(cache_path: Path, fingerprints: dict[str, dict[str, str]]) -> Non
         json.dump(payload, handle, indent=2, sort_keys=True)
 
 
+def save_latest_alert_report(
+    *,
+    config: dict[str, Any],
+    project_root: Path,
+    current_time: datetime,
+    status: str,
+    total_alerts: int,
+    relevant_alerts: int,
+    alerts_to_send: list[dict[str, Any]],
+    body: str | None = None,
+) -> None:
+    """Prepend a human-readable run summary and prune old entries."""
+    report_config = config.get("manual_report", {})
+    if not report_config.get("enabled", True):
+        return
+
+    report_path = project_root / report_config.get("file", "data/latest_alerts.txt")
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+
+    retention_days = int(report_config.get("retention_days", 2))
+    cutoff = current_time - timedelta(days=retention_days)
+    entry = build_latest_alert_report_entry(
+        config=config,
+        current_time=current_time,
+        status=status,
+        total_alerts=total_alerts,
+        relevant_alerts=relevant_alerts,
+        alerts_to_send=alerts_to_send,
+        body=body,
+    )
+
+    entries = [entry]
+    if report_path.exists():
+        existing_text = report_path.read_text(encoding="utf-8")
+        for old_entry in split_latest_alert_report_entries(existing_text):
+            old_time = parse_latest_alert_report_time(old_entry)
+            if old_time is None or old_time >= cutoff:
+                entries.append(old_entry)
+
+    report_path.write_text("\n-----\n".join(entries).rstrip() + "\n", encoding="utf-8")
+
+
+def build_latest_alert_report_entry(
+    *,
+    config: dict[str, Any],
+    current_time: datetime,
+    status: str,
+    total_alerts: int,
+    relevant_alerts: int,
+    alerts_to_send: list[dict[str, Any]],
+    body: str | None,
+) -> str:
+    """Build one newest-first section for data/latest_alerts.txt."""
+    timezone_name = config.get("timezone", "America/New_York")
+    lines = [
+        f"=== {current_time.isoformat()} | {status} ===",
+        f"Checked: {current_time.strftime('%Y-%m-%d %I:%M %p')} ({timezone_name})",
+        (
+            "Counts: "
+            f"total_fetched={total_alerts}, "
+            f"relevant={relevant_alerts}, "
+            f"would_notify={len(alerts_to_send)}"
+        ),
+        "",
+    ]
+
+    if body:
+        lines.append(body)
+    elif alerts_to_send:
+        lines.append("Alerts that would notify:")
+        for alert in alerts_to_send:
+            lines.append(f"- {format_report_alert(alert)}")
+    elif relevant_alerts:
+        lines.append("Relevant alerts were found, but none need a new notification.")
+    else:
+        lines.append("No relevant monitored alerts found.")
+
+    return "\n".join(lines).rstrip()
+
+
+def format_report_alert(alert: dict[str, Any]) -> str:
+    """Format one alert for the manual latest-alerts report."""
+    route_text = ", ".join(alert.get("routes", [])) or alert.get("source", "").upper()
+    header = (alert.get("header") or "Service alert").strip()
+    reason = alert.get("send_reason", "current")
+    return f"[{reason}] [{route_text}] {header}"
+
+
+def split_latest_alert_report_entries(report_text: str) -> list[str]:
+    """Split the manual latest-alerts report into retained sections."""
+    return [entry.strip() for entry in report_text.split("\n-----\n") if entry.strip()]
+
+
+def parse_latest_alert_report_time(entry: str) -> datetime | None:
+    """Parse the ISO timestamp from a latest-alerts report section."""
+    first_line = entry.splitlines()[0] if entry.splitlines() else ""
+    if not first_line.startswith("=== ") or " | " not in first_line:
+        return None
+
+    timestamp_text = first_line.removeprefix("=== ").split(" | ", 1)[0]
+    try:
+        return datetime.fromisoformat(timestamp_text)
+    except ValueError:
+        return None
+
+
 def save_snapshot(
     *,
     config: dict[str, Any],
@@ -388,6 +494,15 @@ def main() -> int:
             len(relevant_alerts),
         )
         save_cache(cache_path, sent_cache)
+        save_latest_alert_report(
+            config=config,
+            project_root=project_root,
+            current_time=now,
+            status="no_send",
+            total_alerts=len(all_alerts),
+            relevant_alerts=len(relevant_alerts),
+            alerts_to_send=[],
+        )
         save_snapshot(
             config=config,
             project_root=project_root,
@@ -410,6 +525,45 @@ def main() -> int:
     subject = build_subject(config, new_count, reminder_count)
     body_lines = build_email_lines(alerts_to_send, now, config)
     body = "\n".join(body_lines)
+    notifications_enabled = config.get("notifications", {}).get("enabled", True)
+
+    if not notifications_enabled:
+        logger.info(
+            "Notifications disabled; skipping email for %s alerts (%s new, %s ongoing reminders). Relevant=%s Checked=%s",
+            len(alerts_to_send),
+            new_count,
+            reminder_count,
+            len(relevant_alerts),
+            len(all_alerts),
+        )
+        save_latest_alert_report(
+            config=config,
+            project_root=project_root,
+            current_time=now,
+            status="email_disabled",
+            total_alerts=len(all_alerts),
+            relevant_alerts=len(relevant_alerts),
+            alerts_to_send=alerts_to_send,
+            body=body,
+        )
+        save_snapshot(
+            config=config,
+            project_root=project_root,
+            current_time=now,
+            snapshot_name="email-disabled",
+            payload={
+                "checked_at": now.isoformat(),
+                "status": "email_disabled",
+                "subject": subject,
+                "body": body,
+                "total_alerts": len(all_alerts),
+                "relevant_alerts": len(relevant_alerts),
+                "alerts_to_send": alerts_to_send,
+                "new_alerts": new_count,
+                "ongoing_reminders": reminder_count,
+            },
+        )
+        return 0
 
     try:
         send_email(config, subject, body)
@@ -437,6 +591,16 @@ def main() -> int:
         sent_cache[alert["fingerprint"]] = build_cache_record(alert, now)
 
     save_cache(cache_path, sent_cache)
+    save_latest_alert_report(
+        config=config,
+        project_root=project_root,
+        current_time=now,
+        status="email_sent",
+        total_alerts=len(all_alerts),
+        relevant_alerts=len(relevant_alerts),
+        alerts_to_send=alerts_to_send,
+        body=body,
+    )
     save_snapshot(
         config=config,
         project_root=project_root,

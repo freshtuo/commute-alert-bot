@@ -48,12 +48,14 @@ monitoring:
       - "M106"
 
 notifications:
+  enabled: false
   sender_email: "your-bot@gmail.com"
   recipients:
     - "you@example.com"
     - "wife@example.com"
   smtp_host: "smtp.gmail.com"
-  smtp_port: 587
+  smtp_port: 465
+  smtp_tls_mode: "ssl"
   gmail_app_password_env: "GMAIL_APP_PASSWORD"
   subject_prefix: "[ALERT] Commute Alert"
 
@@ -84,3 +86,8 @@ snapshots:
   keep_last: 10
   raw_on_error: true
   raw_max_bytes: 250000
+
+manual_report:
+  enabled: true
+  file: "data/latest_alerts.txt"
+  retention_days: 2

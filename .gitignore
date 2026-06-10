@@ -3,5 +3,6 @@ logs/
 .venv/
 config/config.local.yaml
 data/alert_cache.json
+data/latest_alerts.txt
 data/snapshots/
 run.sh

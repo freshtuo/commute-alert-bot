@@ -183,6 +183,11 @@ Check:
 
 - `GMAIL_APP_PASSWORD`
 - sender and recipients in `config/config.local.yaml`
+- SMTP egress from the server. Gmail supports SSL on port `465` and STARTTLS
+  on port `587`; some servers block `587`.
+- Gmail account security. If the log shows `WebLoginRequired` or an SMTP
+  authentication error, sign in to the sender Gmail account in a browser and
+  create/rotate the App Password for that same account.
 - spam/junk folders
 - `logs/commute-alert-bot.log`
 
