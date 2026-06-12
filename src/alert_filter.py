@@ -16,7 +16,15 @@ def filter_relevant_alerts(
     subway_enabled = subway_config.get("enabled", True)
     subway_routes = set(subway_config.get("routes", []))
     rail_config = monitoring.get("rail", {})
-    rail_filters = [value.lower() for value in rail_config.get("text_filters", [])]
+    rail_required_filters = [
+        value.lower()
+        for value in rail_config.get(
+            "required_text_filters", rail_config.get("text_filters", [])
+        )
+    ]
+    rail_context_filters = [
+        value.lower() for value in rail_config.get("context_text_filters", [])
+    ]
     rail_route_ids = set(rail_config.get("route_ids", []))
     rail_stop_ids = set(rail_config.get("stop_ids", []))
     rail_route_names = [value.lower() for value in rail_config.get("route_names", [])]
@@ -49,7 +57,8 @@ def filter_relevant_alerts(
             stop_ids=rail_stop_ids,
             route_names=rail_route_names,
             station_names=rail_station_names,
-            text_filters=rail_filters,
+            required_text_filters=rail_required_filters,
+            context_text_filters=rail_context_filters,
         ):
             relevant_alerts.append(alert)
 
@@ -129,9 +138,15 @@ def alert_matches_lirr_scope(
     stop_ids: set[str],
     route_names: list[str],
     station_names: list[str],
-    text_filters: list[str],
+    required_text_filters: list[str],
+    context_text_filters: list[str],
 ) -> bool:
-    """Match LIRR alerts using route IDs, stop IDs, and route/station text hints."""
+    """Match LIRR alerts using monitored branch/station hints.
+
+    Broad terminal names like Penn Station and Grand Central are useful context,
+    but they should not match by themselves because many unrelated LIRR branches
+    use those terminals.
+    """
     agencies = set(alert.get("agencies", []))
     if "LI" not in agencies:
         return False
@@ -153,11 +168,11 @@ def alert_matches_lirr_scope(
         ]
     ).lower()
 
-    combined_filters = route_names + station_names + text_filters
-    if not combined_filters and not route_ids and not stop_ids:
+    required_filters = route_names + station_names + required_text_filters
+    if not required_filters and not route_ids and not stop_ids:
         return True
 
-    return any(text_filter in haystack for text_filter in combined_filters)
+    return any(text_filter in haystack for text_filter in required_filters)
 
 
 def build_email_lines(

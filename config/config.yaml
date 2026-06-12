@@ -30,14 +30,12 @@ monitoring:
       - "port washington"
     station_names:
       - "great neck"
-      - "penn station"
-      - "grand central"
-    text_filters:
-      - "lirr"
+    required_text_filters:
       - "great neck"
+      - "port washington"
+    context_text_filters:
       - "penn station"
       - "grand central"
-      - "port washington"
   bus:
     enabled: true
     routes:
@@ -48,7 +46,7 @@ monitoring:
       - "M106"
 
 notifications:
-  enabled: false
+  enabled: true
   sender_email: "your-bot@gmail.com"
   recipients:
     - "you@example.com"

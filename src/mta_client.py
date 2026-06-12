@@ -187,7 +187,12 @@ def normalize_unix_timestamp(timestamp: int) -> int | None:
 
 
 def build_fingerprint(alert: dict[str, Any]) -> str:
-    """Build a stable incident key for de-duplication across cron runs."""
+    """Build a stable incident key for de-duplication across cron runs.
+
+    MTA can revise alert active-period timestamps while leaving the incident ID
+    and text unchanged. Keep active periods out of the fingerprint so those
+    updates do not produce duplicate notifications for the same incident.
+    """
     raw = "|".join(
         [
             alert.get("source", ""),
@@ -195,7 +200,6 @@ def build_fingerprint(alert: dict[str, Any]) -> str:
             ",".join(alert.get("agencies", [])),
             ",".join(alert.get("routes", [])),
             ",".join(alert.get("stops", [])),
-            alert.get("active_period_signature", ""),
             alert.get("header", ""),
             alert.get("description", ""),
             alert.get("detail_url", ""),

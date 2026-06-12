@@ -338,7 +338,7 @@ def should_send_alert(
 ) -> str | None:
     """Return the reason to send an alert now, or None when it should stay suppressed."""
     fingerprint = alert["fingerprint"]
-    metadata = sent_cache.get(fingerprint)
+    metadata = find_cached_alert_metadata(alert, sent_cache)
     if not metadata:
         return "new"
 
@@ -353,6 +353,42 @@ def should_send_alert(
 
     if current_time - sent_dt >= timedelta(minutes=reminder_after_minutes):
         return "reminder"
+
+    return None
+
+
+def find_cached_alert_metadata(
+    alert: dict[str, Any], sent_cache: dict[str, dict[str, str]]
+) -> dict[str, str] | None:
+    """Find exact or legacy cache metadata for an alert.
+
+    Older cache keys included active-period timestamps. This fallback prevents
+    one extra resend after switching to a more stable fingerprint.
+    """
+    fingerprint = alert["fingerprint"]
+    if fingerprint in sent_cache:
+        return sent_cache[fingerprint]
+
+    alert_id = alert.get("id", "")
+    header = alert.get("header", "")
+    agencies = ",".join(alert.get("agencies", []))
+    routes = ",".join(alert.get("routes", []))
+    stops = ",".join(alert.get("stops", []))
+
+    for metadata in sent_cache.values():
+        if (
+            alert_id
+            and metadata.get("alert_id") == alert_id
+            and metadata.get("header") == header
+        ):
+            return metadata
+        if (
+            metadata.get("header") == header
+            and metadata.get("agencies") == agencies
+            and metadata.get("routes") == routes
+            and metadata.get("stops") == stops
+        ):
+            return metadata
 
     return None
 
@@ -483,7 +519,7 @@ def main() -> int:
             continue
         enriched_alert = dict(alert)
         enriched_alert["send_reason"] = send_reason
-        existing = sent_cache.get(alert["fingerprint"], {})
+        existing = find_cached_alert_metadata(alert, sent_cache) or {}
         enriched_alert["first_sent_at"] = existing.get("first_sent_at", now.isoformat())
         alerts_to_send.append(enriched_alert)
 
